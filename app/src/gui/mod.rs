@@ -222,25 +222,23 @@ impl eframe::App for App {
         // Show active toast messages
         self.toasts.show(ctx);
 
-            self.visible.store(true, Ordering::SeqCst);
-            self.toasts
-                .warning("Window hiding is currently not supported.\nSee https://github.com/4JX/L5P-Keyboard-RGB/issues/181")
-                .duration(None);
-        }
-
+        // 1. Check for single instance error
         if self.instance_not_unique && modals::unique_instance(ctx) {
             self.exit_app();
         }
 
+        // 2. Check for manager error
         if !self.instance_not_unique && self.manager.is_none() && modals::manager_error(ctx) {
             self.exit_app();
         }
 
+        // 3. Top panel (Menu Bar)
         TopBottomPanel::top("top-panel").show(ctx, |ui| {
             self.menu_bar
                 .show(ctx, ui, &mut self.current_profile, &mut self.loaded_effect, &mut self.state_changed, &mut self.toasts);
         });
 
+        // 4. Central Panel (Main UI)
         CentralPanel::default()
             .frame(Frame::new().inner_margin(self.theme.spacing.large).fill(Color32::from_gray(26)))
             .show(ctx, |ui| {
@@ -248,10 +246,12 @@ impl eframe::App for App {
                 self.show_ui_elements(ctx, ui);
             });
 
+        // 5. Update state
         if self.state_changed {
             self.update_state();
         }
 
+        // 6. Handle close request (hiding the window)
         self.handle_close_request(ctx);
     }
 
