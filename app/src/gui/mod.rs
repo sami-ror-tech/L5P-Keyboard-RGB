@@ -163,45 +163,40 @@ impl App {
         let gui_tx = self.gui_tx.clone();
         let has_tray = self.has_tray.clone();
 
-        // 🔥 الإصلاح: معالج أحداث Tray محسن
-        std::thread::spawn(move || {
-            println!("[GUI] Starting tray event handler thread");
-            
-            // الحصول على مستقبل الأحداث مرة واحدة
-            let receiver = MenuEvent::receiver();
-            
-            loop {
-                // 🔥 الإصلاح: استخدم recv() الذي ينتظر الأحداث
-                match receiver.recv() {
-                    Ok(event) => {
-                        println!("[GUI] Tray event: {} -> {:?}", event.id, event);
-                        
-                        match event.id.as_str() {
-                            SHOW_ID => {
-                                println!("[GUI] Showing window from tray");
-                                // إرسال رسالة إلى الخيط الرئيسي
-                                let _ = gui_tx.send(GuiMessage::ShowWindow);
-                                
-                                // أيضًا طلب إعادة الرسم فورًا
-                                egui_ctx.request_repaint();
-                            }
-                            QUIT_ID => {
-                                println!("[GUI] Quitting from tray");
-                                let _ = gui_tx.send(GuiMessage::Quit);
-                                has_tray.store(false, Ordering::SeqCst);
-                            }
-                            _ => {
-                                println!("[GUI] Unknown tray event: {}", event.id);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("[GUI] Tray event channel error: {}", e);
-                        break; // الخروج عند حدوث خطأ
-                    }
+        // في دالة init()، استبدل الخيط مع معالج الأحداث بهذا:
+
+std::thread::spawn(move || {
+    println!("[GUI] Starting tray event handler thread");
+    
+    let receiver = MenuEvent::receiver();
+    
+    loop {
+        match receiver.recv() {
+            Ok(event) => {
+                // 🔥 الإصلاح: استخدم Debug formatting بدلاً من Display
+                println!("[GUI] Tray event: {:?} -> {:?}", event.id, event);
+                
+                // 🔥 الإصلاح: قارن مباشرةً بالـ MenuId
+                if event.id == MenuId::new(SHOW_ID) {
+                    println!("[GUI] Showing window from tray");
+                    let _ = gui_tx.send(GuiMessage::ShowWindow);
+                    egui_ctx.request_repaint();
+                } else if event.id == MenuId::new(QUIT_ID) {
+                    println!("[GUI] Quitting from tray");
+                    let _ = gui_tx.send(GuiMessage::Quit);
+                    has_tray.store(false, Ordering::SeqCst);
+                } else {
+                    // 🔥 الإصلاح: استخدم Debug formatting
+                    println!("[GUI] Unknown tray event: {:?}", event.id);
                 }
             }
-        });
+            Err(e) => {
+                println!("[GUI] Tray event channel error: {}", e);
+                break;
+            }
+        }
+    }
+});
 
         let ctx = cc.egui_ctx.clone();
         let gui_tx_c = self.gui_tx.clone();
