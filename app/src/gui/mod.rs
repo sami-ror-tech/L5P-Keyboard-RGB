@@ -58,6 +58,7 @@ pub struct App {
 pub enum GuiMessage {
     CycleProfiles,
     Quit,
+    Show, // <== تم إضافة أمر الإظهار
 }
 
 pub struct LoadedEffect {
@@ -162,14 +163,14 @@ impl App {
         let gui_tx = self.gui_tx.clone();
         let has_tray = self.has_tray.clone();
 
+        // خيط معالج أحداث الـ TRAY
         std::thread::spawn(move || loop {
             if let Ok(event) = MenuEvent::receiver().recv() {
                 println!("Received Tray Menu Event: {:?}", event.id);
                 if event.id == SHOW_ID {
+                    // نرسل رسالة "Show" إلى الخيط الرئيسي
+                    let _ = gui_tx.send(GuiMessage::Show);
                     egui_ctx.request_repaint();
-
-                    egui_ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-                    egui_ctx.send_viewport_cmd(ViewportCommand::Focus);
                 } else if event.id == QUIT_ID {
                     egui_ctx.request_repaint();
 
@@ -212,10 +213,15 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        // معالجة رسائل الخيط الأخرى (بما في ذلك Show و Quit)
         if let Ok(message) = self.gui_rx.try_recv() {
             match message {
                 GuiMessage::CycleProfiles => self.cycle_profiles(),
                 GuiMessage::Quit => self.exit_app(),
+                GuiMessage::Show => { // <== معالج الإظهار على الخيط الرئيسي
+                    ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                    ctx.send_viewport_cmd(ViewportCommand::Focus);
+                }
             }
         }
 
