@@ -23,7 +23,7 @@ use cli::{GuiCommand, OutputType};
 use color_eyre::{eyre::eyre, Result};
 use eframe::{egui::IconData, epaint::Vec2};
 use gui::App;
-use tray_icon::TrayIcon; // تأكد من استيراد TrayIcon هنا لضمان التصحيح
+use tray_icon::TrayIcon;
 
 const APP_ICON: &[u8; 14987] = include_bytes!("../res/trayIcon.ico");
 const WINDOW_SIZE: Vec2 = Vec2::new(500., 460.);
@@ -31,6 +31,12 @@ const WINDOW_SIZE: Vec2 = Vec2::new(500., 460.);
 pub static DENY_HIDING: LazyLock<bool> = LazyLock::new(|| std::env::var("WAYLAND_DISPLAY").is_ok());
 #[cfg(not(target_os = "linux"))]
 pub static DENY_HIDING: LazyLock<bool> = LazyLock::new(|| false);
+
+// 🔥 الإصلاح: متغير عالمي لحفظ أيقونة الـ Tray
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+static TRAY_HOLDER: Lazy<Mutex<Option<TrayIcon>>> = Lazy::new(|| Mutex::new(None));
 
 fn main() {
     #[cfg(target_os = "windows")]
@@ -57,7 +63,6 @@ fn run_windows() {
 
 #[cfg(target_os = "windows")]
 fn setup_panic() -> Result<()> {
-    // A somewhat unwrapped version of color_eyre::install() to add a "wait for enter" after printing the text
     let builder = color_eyre::config::HookBuilder::default();
 
     let (panic_hook, eyre_hook) = builder.into_hooks();
@@ -65,7 +70,7 @@ fn setup_panic() -> Result<()> {
 
     std::panic::set_hook(Box::new(move |panic_info| {
         if !console::alloc_with_color_support() {
-            return; // No console to print to
+            return;
         }
 
         eprintln!("{}", panic_hook.panic_report(panic_info));
@@ -105,26 +110,32 @@ fn start_ui(output_type: OutputType, hide_window: bool) {
 
     let has_tray_c = has_tray.clone();
 
-    // Since egui uses winit under the hood and doesn't use gtk on Linux, and we need gtk for
-    // the tray icon to show up, we need to spawn a thread
-    // where we initialize gtk and create the tray_icon
+    // 🔥 الإصلاح: إنشاء وحفظ أيقونة الـ Tray بشكل صحيح
     #[cfg(target_os = "linux")]
     std::thread::spawn(move || {
         gtk::init().unwrap();
 
         let tray_icon = tray::build_tray(true);
         has_tray_c.store(tray_icon.is_some(), Ordering::SeqCst);
+        
+        // حفظ الأيقونة لمنع التدمير
+        if let Some(icon) = tray_icon {
+            *TRAY_HOLDER.lock().unwrap() = Some(icon);
+        }
 
         gtk::main();
     });
 
-    // 💡 التصحيح الحاسم: بناء أيقونة الـ Tray وتخزينها هنا في متغير محلي (`_tray_icon`)
-    // لضمان بقائها حية (Alive) طوال فترة تشغيل eframe::run_native.
     #[cfg(not(target_os = "linux"))]
-    let _tray_icon: Option<TrayIcon> = tray::build_tray(true);
-
-    #[cfg(not(target_os = "linux"))]
-    has_tray_c.store(_tray_icon.is_some(), Ordering::SeqCst);
+    {
+        let tray_icon = tray::build_tray(true);
+        has_tray_c.store(tray_icon.is_some(), Ordering::SeqCst);
+        
+        // 🔥 الإصلاح الحاسم: حفظ الأيقونة في متغير ثابت
+        if let Some(icon) = tray_icon {
+            *TRAY_HOLDER.lock().unwrap() = Some(icon);
+        }
+    }
 
     let app = App::new(output_type, has_tray, visible);
 
@@ -136,7 +147,9 @@ fn start_ui(output_type: OutputType, hide_window: bool) {
         }),
     )
     .unwrap();
-    // ينتهي نطاق _tray_icon هنا، وعندما يتم إنهاء run_native، سيتم التخلص منه
+    
+    // 🔥 تنظيف: إزالة الأيقونة عند إغلاق التطبيق
+    *TRAY_HOLDER.lock().unwrap() = None;
 }
 
 #[must_use]
