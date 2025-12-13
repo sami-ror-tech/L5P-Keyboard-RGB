@@ -12,13 +12,11 @@ mod tray;
 mod util;
 
 use std::sync::LazyLock;
-// 🔥 الإصلاح: إزالة الاستيرادات غير المستخدمة
-// use std::{process, io::Read}; // ❌ احذف هذا السطر
-
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use std::io::Read; // استيراد Read لتجنب الأخطاء في setup_panic
 
 use cli::{GuiCommand, OutputType};
 use color_eyre::{eyre::eyre, Result};
@@ -32,8 +30,6 @@ const WINDOW_SIZE: Vec2 = Vec2::new(500., 460.);
 pub static DENY_HIDING: LazyLock<bool> = LazyLock::new(|| std::env::var("WAYLAND_DISPLAY").is_ok());
 #[cfg(not(target_os = "linux"))]
 pub static DENY_HIDING: LazyLock<bool> = LazyLock::new(|| false);
-
-// 🔥 الإصلاح: أزل static TRAY_HOLDER تماماً
 
 fn main() {
     #[cfg(target_os = "windows")]
@@ -73,7 +69,7 @@ fn setup_panic() -> Result<()> {
         eprintln!("{}", panic_hook.panic_report(panic_info));
         println!("Press Enter to continue...");
         let mut input = String::new();
-        let _ = std::io::stdin().read_line(&mut input); // 🔥 استيراد مباشر
+        let _ = std::io::stdin().read_line(&mut input); 
         std::process::exit(1);
     }));
 
@@ -107,8 +103,8 @@ fn start_ui(output_type: OutputType, hide_window: bool) {
     };
 
     let has_tray_c = has_tray.clone();
-
-    // 🔥 الحل الحقيقي: حافظ على TrayIcon في متغير محلي فقط
+    
+    // 🔥 التصحيح الحاسم: التأكد من أن الأيقونة تبقى حية
     #[cfg(target_os = "linux")]
     std::thread::spawn(move || {
         gtk::init().unwrap();
@@ -116,9 +112,7 @@ fn start_ui(output_type: OutputType, hide_window: bool) {
         let tray_icon = tray::build_tray(true);
         has_tray_c.store(tray_icon.is_some(), Ordering::SeqCst);
         
-        // ببساطة احتفظ بالأيقونة في هذا الخيط
         let _tray_icon_holder = tray_icon; // متغير محلي يمنع التدمير
-
         gtk::main();
     });
 
@@ -127,8 +121,8 @@ fn start_ui(output_type: OutputType, hide_window: bool) {
         let tray_icon = tray::build_tray(true);
         has_tray_c.store(tray_icon.is_some(), Ordering::SeqCst);
         
-        // 🔥 الحل: متغير محلي فقط (لا static)
-        let _tray_icon_holder = tray_icon; // هذا يكفي لمنع التدمير المبكر
+        // 👈 هذا المتغير المحلي يمنع التدمير المبكر للأيقونة
+        let _tray_icon_holder = tray_icon; 
     }
 
     let app = App::new(output_type, has_tray, visible);
