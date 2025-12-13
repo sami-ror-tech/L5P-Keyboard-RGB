@@ -58,7 +58,7 @@ pub struct App {
 pub enum GuiMessage {
     CycleProfiles,
     Quit,
-    // تم إزالة GuiMessage::Show للعودة إلى الإظهار المباشر الآمن
+    ShowWindow, // 🔥 الإصلاح: إضافة رسالة لإظهار النافذة
 }
 
 pub struct LoadedEffect {
@@ -163,27 +163,44 @@ impl App {
         let gui_tx = self.gui_tx.clone();
         let has_tray = self.has_tray.clone();
 
-        // خيط معالج أحداث الـ TRAY
-        std::thread::spawn(move || loop {
-            // 💡 التصحيح: استخدام try_recv لضمان عدم توقف الخيط وحجب الأحداث
-            if let Ok(event) = MenuEvent::receiver().try_recv() {
-                println!("Received Tray Menu Event: {:?}", event.id);
-                if event.id == SHOW_ID {
-                    egui_ctx.request_repaint();
-
-                    // الإظهار المباشر من خيط الـ Tray (الطريقة المعتادة)
-                    egui_ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-                    egui_ctx.send_viewport_cmd(ViewportCommand::Focus);
-                } else if event.id == QUIT_ID {
-                    egui_ctx.request_repaint();
-
-                    // الإغلاق يتم إرساله كرسالة إلى الخيط الرئيسي
-                    let _ = gui_tx.send(GuiMessage::Quit);
-                    has_tray.store(false, Ordering::SeqCst);
+        // 🔥 الإصلاح: معالج أحداث Tray محسن
+        std::thread::spawn(move || {
+            println!("[GUI] Starting tray event handler thread");
+            
+            // الحصول على مستقبل الأحداث مرة واحدة
+            let receiver = MenuEvent::receiver();
+            
+            loop {
+                // 🔥 الإصلاح: استخدم recv() الذي ينتظر الأحداث
+                match receiver.recv() {
+                    Ok(event) => {
+                        println!("[GUI] Tray event: {} -> {:?}", event.id, event);
+                        
+                        match event.id.as_str() {
+                            SHOW_ID => {
+                                println!("[GUI] Showing window from tray");
+                                // إرسال رسالة إلى الخيط الرئيسي
+                                let _ = gui_tx.send(GuiMessage::ShowWindow);
+                                
+                                // أيضًا طلب إعادة الرسم فورًا
+                                egui_ctx.request_repaint();
+                            }
+                            QUIT_ID => {
+                                println!("[GUI] Quitting from tray");
+                                let _ = gui_tx.send(GuiMessage::Quit);
+                                has_tray.store(false, Ordering::SeqCst);
+                            }
+                            _ => {
+                                println!("[GUI] Unknown tray event: {}", event.id);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("[GUI] Tray event channel error: {}", e);
+                        break; // الخروج عند حدوث خطأ
+                    }
                 }
             }
-            // التأخير الصغير جداً (1ms) لتجنب تجمد معالج الأحداث ومنح دورة للـ Egui Context.
-            thread::sleep(Duration::from_millis(1)); 
         });
 
         let ctx = cc.egui_ctx.clone();
@@ -219,11 +236,17 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        // معالجة رسائل الخيط الأخرى (فقط CycleProfiles و Quit)
-        if let Ok(message) = self.gui_rx.try_recv() {
+        // 🔥 الإصلاح: معالجة جميع رسائل GUI
+        while let Ok(message) = self.gui_rx.try_recv() {
             match message {
                 GuiMessage::CycleProfiles => self.cycle_profiles(),
                 GuiMessage::Quit => self.exit_app(),
+                GuiMessage::ShowWindow => {
+                    // 🔥 الإصلاح: إظهار النافذة وتفعيلها
+                    ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                    ctx.send_viewport_cmd(ViewportCommand::Focus);
+                    self.visible.store(true, Ordering::SeqCst);
+                }
             }
         }
 
@@ -261,6 +284,9 @@ impl eframe::App for App {
 
         // 6. Handle close request (hiding the window)
         self.handle_close_request(ctx);
+        
+        // 🔥 الإصلاح: طلب إعادة الرسم المستمر للتأكد من استجابة الأحداث
+        ctx.request_repaint();
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -281,7 +307,6 @@ impl eframe::App for App {
 impl App {
     fn configure_style(&self, ctx: &Context) {
         let style = Style {
-            // text_styles: text_utils::default_text_styles(),
             visuals: self.theme.visuals.clone(),
             #[cfg(debug_assertions)]
             debug: DebugOptions {
@@ -298,7 +323,6 @@ impl App {
             ..Style::default()
         };
 
-        // ctx.set_fonts(text_utils::get_font_def());
         ctx.set_style(style);
     }
 
@@ -415,6 +439,7 @@ impl App {
             if self.has_tray.load(Ordering::Relaxed) {
                 ctx.send_viewport_cmd(ViewportCommand::CancelClose);
                 ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+                self.visible.store(false, Ordering::SeqCst);
             } else {
                 // Close normally
             }
