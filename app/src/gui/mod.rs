@@ -163,22 +163,25 @@ impl App {
         let gui_tx = self.gui_tx.clone();
         let has_tray = self.has_tray.clone();
 
-        // ... داخل App::init
-std::thread::spawn(move || loop {
-    // استخدم try_recv بدلاً من recv() لضمان عدم توقف الخيط تماماً
-    if let Ok(event) = MenuEvent::receiver().try_recv() { // <== التعديل هنا
-        println!("Received Tray Menu Event: {:?}", event.id);
-        if event.id == SHOW_ID {
-            egui_ctx.request_repaint(); 
-            egui_ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-            egui_ctx.send_viewport_cmd(ViewportCommand::Focus);
-        } else if event.id == QUIT_ID {
-            egui_ctx.request_repaint();
+        // خيط معالج أحداث الـ TRAY
+        std::thread::spawn(move || loop {
+            // 💡 التعديل الحاسم: استخدام try_recv لضمان عدم توقف الخيط وحجب الأحداث
+            if let Ok(event) = MenuEvent::receiver().try_recv() {
+                println!("Received Tray Menu Event: {:?}", event.id);
+                if event.id == SHOW_ID {
+                    egui_ctx.request_repaint();
 
-            let _ = gui_tx.send(GuiMessage::Quit);
-            has_tray.store(false, Ordering::SeqCst);
-        }
-    }
+                    // الإظهار المباشر من خيط الـ Tray (الطريقة المعتادة)
+                    egui_ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                    egui_ctx.send_viewport_cmd(ViewportCommand::Focus);
+                } else if event.id == QUIT_ID {
+                    egui_ctx.request_repaint();
+
+                    // الإغلاق يتم إرساله كرسالة إلى الخيط الرئيسي
+                    let _ = gui_tx.send(GuiMessage::Quit);
+                    has_tray.store(false, Ordering::SeqCst);
+                }
+            }
             // التأخير الصغير جداً (1ms) لتجنب تجمد معالج الأحداث ومنح دورة للـ Egui Context.
             thread::sleep(Duration::from_millis(1)); 
         });
