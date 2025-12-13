@@ -16,7 +16,8 @@ legion-rgb-driver = { path = "../driver" }
 clap = { version = "4.5.37", features = ["color", "cargo", "derive"] }
 
 # Ui
-eframe = { version = "0.31.1" } 
+eframe = { version = "0.31.1" } # تم إزالة ميزات Linux
+
 # egui-modal = "0.6.0"
 egui-modal = { git = "https://github.com/n00kii/egui-modal", rev = "74add2407bb945992bd15c79fcedc2af2ee0fb4a" }
 egui_file = "0.22.1"
@@ -29,7 +30,7 @@ egui-notify = "0.19.0"
 image = "0.25.6"
 
 # AmbientLight effect
-scrap = { git = "https://github.com/rustdesk/rustdesk", rev = "c626c24" } # <--- تم التصحيح هنا
+scrap = { git = "https://github.com/rustdesk/rustdesk", rev = "c626c24" } # تم إزالة مصفوفة features الفارغة
 fast_image_resize = "5.1.3"
 # default-features = false just removes the use_wasm feature that removes a lot of unecessary slack
 # since this app wont ever use the web
@@ -83,7 +84,7 @@ rev = "b12aa38"
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = ["libvpx", "libyuv", "aom"] }
 x86_64-pc-windows-msvc = { dependencies = [
-    "libvpx:x64-windows-static",
-    "libyuv:x64-windows-static",
-    "aom:x64-windows-static",
+    "libvpx:x64-windows-static",
+    "libyuv:x64-windows-static",
+    "aom:x64-windows-static",
 ] }
