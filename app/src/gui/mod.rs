@@ -58,7 +58,7 @@ pub struct App {
 pub enum GuiMessage {
     CycleProfiles,
     Quit,
-    Show, // <== تم إضافة أمر الإظهار
+    // تم إزالة GuiMessage::Show للعودة إلى الإظهار المباشر الآمن
 }
 
 pub struct LoadedEffect {
@@ -168,16 +168,21 @@ impl App {
             if let Ok(event) = MenuEvent::receiver().recv() {
                 println!("Received Tray Menu Event: {:?}", event.id);
                 if event.id == SHOW_ID {
-                    // نرسل رسالة "Show" إلى الخيط الرئيسي
-                    let _ = gui_tx.send(GuiMessage::Show);
                     egui_ctx.request_repaint();
+
+                    // الإظهار المباشر من خيط الـ Tray (الطريقة المعتادة)
+                    egui_ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+                    egui_ctx.send_viewport_cmd(ViewportCommand::Focus);
                 } else if event.id == QUIT_ID {
                     egui_ctx.request_repaint();
 
+                    // الإغلاق يتم إرساله كرسالة إلى الخيط الرئيسي
                     let _ = gui_tx.send(GuiMessage::Quit);
                     has_tray.store(false, Ordering::SeqCst);
                 }
             }
+            // التأخير الصغير جداً (1ms) لتجنب تجمد معالج الأحداث ومنح دورة للـ Egui Context.
+            thread::sleep(Duration::from_millis(1)); 
         });
 
         let ctx = cc.egui_ctx.clone();
@@ -213,15 +218,11 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        // معالجة رسائل الخيط الأخرى (بما في ذلك Show و Quit)
+        // معالجة رسائل الخيط الأخرى (فقط CycleProfiles و Quit)
         if let Ok(message) = self.gui_rx.try_recv() {
             match message {
                 GuiMessage::CycleProfiles => self.cycle_profiles(),
                 GuiMessage::Quit => self.exit_app(),
-                GuiMessage::Show => { // <== معالج الإظهار على الخيط الرئيسي
-                    ctx.send_viewport_cmd(ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(ViewportCommand::Focus);
-                }
             }
         }
 
