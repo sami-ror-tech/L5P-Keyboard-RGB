@@ -24,7 +24,7 @@ use cli::{GuiCommand, OutputType};
 use color_eyre::{eyre::eyre, Result};
 use eframe::{egui::IconData, epaint::Vec2};
 use gui::App;
-use tray_icon::TrayIcon;
+use tray_icon::TrayIcon as _;
 
 const APP_ICON: &[u8; 14987] = include_bytes!("../res/trayIcon.ico");
 const WINDOW_SIZE: Vec2 = Vec2::new(500., 460.);
