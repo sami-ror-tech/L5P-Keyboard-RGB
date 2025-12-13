@@ -36,22 +36,18 @@ pub fn build_tray(has_gui: bool) -> Option<TrayIcon> {
     let items = TrayMenuItems::build();
     let menu = build_tray_menu(&items, has_gui);
 
-    // 🔥 الإصلاح: بناء TrayIcon بالطريقة الصحيحة لهذا الإصدار
     let tray_icon = TrayIconBuilder::new()
         .with_tooltip("Legion Keyboard Control")
         .with_icon(load_tray_icon(APP_ICON))
         .with_menu(Box::new(menu))
-        .with_menu_on_left_click(false) // 🔥 مهم: إضافة هذه السطر
+        // 🔥 التصحيح الحاسم: منع ظهور القائمة عند النقر الأيسر
+        // مما يجبر النقر الأيسر على إرسال الحدث الافتراضي (SHOW_ID)
+        .with_menu_on_left_click(false) 
         .build();
 
     match tray_icon {
         Ok(tray_icon) => {
             println!("[TRAY] Tray icon created successfully");
-            
-            // 🔥 الإصلاح: إضافة معالج الأحداث بالطريقة الصحيحة
-            // في هذا الإصدار، الأحداث تُرسل تلقائياً عبر MenuEvent::receiver()
-            // لا حاجة لـ on_menu_event أو on_left_click
-            
             Some(tray_icon)
         }
         Err(e) => {
@@ -71,7 +67,8 @@ fn load_tray_icon(image_data: &[u8]) -> Icon {
         Ok(icon) => icon,
         Err(e) => {
             eprintln!("[TRAY] Failed to load icon: {}", e);
-            Icon::from_rgba(vec![0, 0, 0, 0], 1, 1).unwrap()
+            // إرجاع أيقونة فارغة لتجنب الانهيار
+            Icon::from_rgba(vec![0, 0, 0, 0], 1, 1).unwrap() 
         }
     }
 }
