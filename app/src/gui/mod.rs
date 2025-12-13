@@ -168,27 +168,24 @@ impl App {
             let receiver = MenuEvent::receiver();
             
             loop {
-                match receiver.recv() {
-                    Ok(event) => {
-                        println!("[GUI] Tray event received");
-                        
-                        if event.id.0 == SHOW_ID {
-                            println!("[GUI] Showing window from tray");
-                            let _ = gui_tx.send(GuiMessage::ShowWindow);
-                            egui_ctx.request_repaint();
-                        } else if event.id.0 == QUIT_ID {
-                            println!("[GUI] Quitting from tray");
-                            let _ = gui_tx.send(GuiMessage::Quit);
-                            has_tray.store(false, Ordering::SeqCst);
-                        } else {
-                            println!("[GUI] Unknown tray event ID: {:?}", event.id.0);
-                        }
-                    }
-                    Err(e) => {
-                        println!("[GUI] Tray event channel error: {}", e);
-                        break;
+                // 🔥 التصحيح الحاسم: استخدام try_recv() بدلاً من recv() لمنع التجمد
+                if let Ok(event) = receiver.try_recv() { 
+                    println!("[GUI] Tray event received: ID {:?}", event.id.0);
+                    
+                    if event.id.0 == SHOW_ID {
+                        println!("[GUI] Showing window from tray");
+                        let _ = gui_tx.send(GuiMessage::ShowWindow);
+                        egui_ctx.request_repaint();
+                    } else if event.id.0 == QUIT_ID {
+                        println!("[GUI] Quitting from tray");
+                        let _ = gui_tx.send(GuiMessage::Quit);
+                        has_tray.store(false, Ordering::SeqCst);
+                    } else {
+                        println!("[GUI] Unknown tray event ID: {:?}", event.id.0);
                     }
                 }
+                // 👈 مهم: إضافة فترة انتظار لتخفيف الضغط على المعالج
+                thread::sleep(Duration::from_millis(10)); 
             }
         });
 
@@ -225,6 +222,7 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        // معالجة رسائل الـ GUI التي قد تأتي من خيط الـ Tray أو خيط اختصار لوحة المفاتيح
         while let Ok(message) = self.gui_rx.try_recv() {
             match message {
                 GuiMessage::CycleProfiles => self.cycle_profiles(),
@@ -321,7 +319,7 @@ impl App {
         if let Some((i, _)) = self.saved_items.profiles.iter().enumerate().find(|(_, profile)| &profile.name == current_profile_name) {
             if i == len - 1 && len > 0 {
                 self.current_profile = self.saved_items.profiles[0].clone();
-            } else {
+            } else if len > 0 {
                 self.current_profile = self.saved_items.profiles[i + 1].clone();
             }
 
