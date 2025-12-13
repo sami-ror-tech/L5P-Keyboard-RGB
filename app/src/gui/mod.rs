@@ -18,6 +18,7 @@ use eframe::{
 use egui_notify::Toasts;
 use strum::IntoEnumIterator;
 use tray_icon::menu::MenuEvent;
+use tray_icon::MenuId;
 
 use crate::{
     cli::OutputType,
@@ -58,7 +59,7 @@ pub struct App {
 pub enum GuiMessage {
     CycleProfiles,
     Quit,
-    ShowWindow, // 🔥 الإصلاح: إضافة رسالة لإظهار النافذة
+    ShowWindow,
 }
 
 pub struct LoadedEffect {
@@ -121,7 +122,7 @@ impl App {
         let Settings { current_profile, profiles, effects } = settings;
 
         let gui_tx_c = gui_tx.clone();
-        // Default app state
+        
         let mut app = Self {
             instance_not_unique,
             gui_tx,
@@ -131,7 +132,6 @@ impl App {
             visible,
 
             manager,
-            // Default to true for an instant update on launch
             state_changed: true,
             loaded_effect: LoadedEffect::default(),
             current_profile,
@@ -143,7 +143,6 @@ impl App {
             toasts: Toasts::default(),
         };
 
-        // Update the state according to the option chosen by the user
         match output {
             OutputType::Profile(profile) => app.current_profile = profile,
             OutputType::Custom(effect) => app.loaded_effect = LoadedEffect::queued(effect),
@@ -163,40 +162,35 @@ impl App {
         let gui_tx = self.gui_tx.clone();
         let has_tray = self.has_tray.clone();
 
-        // في دالة init()، استبدل الخيط مع معالج الأحداث بهذا:
-
-std::thread::spawn(move || {
-    println!("[GUI] Starting tray event handler thread");
-    
-    let receiver = MenuEvent::receiver();
-    
-    loop {
-        match receiver.recv() {
-            Ok(event) => {
-                // 🔥 الإصلاح: استخدم Debug formatting بدلاً من Display
-                println!("[GUI] Tray event: {:?} -> {:?}", event.id, event);
-                
-                // 🔥 الإصلاح: قارن مباشرةً بالـ MenuId
-                if event.id == MenuId::new(SHOW_ID) {
-                    println!("[GUI] Showing window from tray");
-                    let _ = gui_tx.send(GuiMessage::ShowWindow);
-                    egui_ctx.request_repaint();
-                } else if event.id == MenuId::new(QUIT_ID) {
-                    println!("[GUI] Quitting from tray");
-                    let _ = gui_tx.send(GuiMessage::Quit);
-                    has_tray.store(false, Ordering::SeqCst);
-                } else {
-                    // 🔥 الإصلاح: استخدم Debug formatting
-                    println!("[GUI] Unknown tray event: {:?}", event.id);
+        std::thread::spawn(move || {
+            println!("[GUI] Starting tray event handler thread");
+            
+            let receiver = MenuEvent::receiver();
+            
+            loop {
+                match receiver.recv() {
+                    Ok(event) => {
+                        println!("[GUI] Tray event received");
+                        
+                        if event.id.0 == SHOW_ID {
+                            println!("[GUI] Showing window from tray");
+                            let _ = gui_tx.send(GuiMessage::ShowWindow);
+                            egui_ctx.request_repaint();
+                        } else if event.id.0 == QUIT_ID {
+                            println!("[GUI] Quitting from tray");
+                            let _ = gui_tx.send(GuiMessage::Quit);
+                            has_tray.store(false, Ordering::SeqCst);
+                        } else {
+                            println!("[GUI] Unknown tray event ID: {:?}", event.id.0);
+                        }
+                    }
+                    Err(e) => {
+                        println!("[GUI] Tray event channel error: {}", e);
+                        break;
+                    }
                 }
             }
-            Err(e) => {
-                println!("[GUI] Tray event channel error: {}", e);
-                break;
-            }
-        }
-    }
-});
+        });
 
         let ctx = cc.egui_ctx.clone();
         let gui_tx_c = self.gui_tx.clone();
@@ -231,13 +225,11 @@ std::thread::spawn(move || {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        // 🔥 الإصلاح: معالجة جميع رسائل GUI
         while let Ok(message) = self.gui_rx.try_recv() {
             match message {
                 GuiMessage::CycleProfiles => self.cycle_profiles(),
                 GuiMessage::Quit => self.exit_app(),
                 GuiMessage::ShowWindow => {
-                    // 🔥 الإصلاح: إظهار النافذة وتفعيلها
                     ctx.send_viewport_cmd(ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(ViewportCommand::Focus);
                     self.visible.store(true, Ordering::SeqCst);
@@ -245,26 +237,21 @@ impl eframe::App for App {
             }
         }
 
-        // Show active toast messages
         self.toasts.show(ctx);
 
-        // 1. Check for single instance error
         if self.instance_not_unique && modals::unique_instance(ctx) {
             self.exit_app();
         }
 
-        // 2. Check for manager error
         if !self.instance_not_unique && self.manager.is_none() && modals::manager_error(ctx) {
             self.exit_app();
         }
 
-        // 3. Top panel (Menu Bar)
         TopBottomPanel::top("top-panel").show(ctx, |ui| {
             self.menu_bar
                 .show(ctx, ui, &mut self.current_profile, &mut self.loaded_effect, &mut self.state_changed, &mut self.toasts);
         });
 
-        // 4. Central Panel (Main UI)
         CentralPanel::default()
             .frame(Frame::new().inner_margin(self.theme.spacing.large).fill(Color32::from_gray(26)))
             .show(ctx, |ui| {
@@ -272,15 +259,12 @@ impl eframe::App for App {
                 self.show_ui_elements(ctx, ui);
             });
 
-        // 5. Update state
         if self.state_changed {
             self.update_state();
         }
 
-        // 6. Handle close request (hiding the window)
         self.handle_close_request(ctx);
         
-        // 🔥 الإصلاح: طلب إعادة الرسم المستمر للتأكد من استجابة الأحداث
         ctx.request_repaint();
     }
 
