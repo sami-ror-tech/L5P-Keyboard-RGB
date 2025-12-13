@@ -36,13 +36,12 @@ pub fn build_tray(has_gui: bool) -> Option<TrayIcon> {
     let items = TrayMenuItems::build();
     let menu = build_tray_menu(&items, has_gui);
 
+    // 🛑 الرجاء ملاحظة: لقد أزلنا .with_menu_on_left_click(false) 
+    // لتجنب تعقيدات سلوك النقر الافتراضي ونعتمد على المكتبة لإرسال حدث عند النقر الأيسر.
     TrayIconBuilder::new()
         .with_tooltip("Legion Keyboard Control")
         .with_icon(load_tray_icon(APP_ICON))
         .with_menu(Box::new(menu))
-        // 💡 التصحيح الحاسم: منع ظهور القائمة بالنقر الأيسر.
-        // هذا يجبر المكتبة على استخدام سلوك النقر الأيسر الافتراضي (إرسال الحدث).
-        .with_menu_on_left_click(false) 
         .build()
         .ok()
 }
