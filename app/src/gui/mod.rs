@@ -18,7 +18,7 @@ use eframe::{
 use egui_notify::Toasts;
 use strum::IntoEnumIterator;
 use tray_icon::menu::MenuEvent;
-use tray_icon::MenuId;
+use tray_icon::menu::MenuId;
 
 use crate::{
     cli::OutputType,
