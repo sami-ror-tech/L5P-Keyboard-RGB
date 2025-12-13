@@ -36,23 +36,52 @@ pub fn build_tray(has_gui: bool) -> Option<TrayIcon> {
     let items = TrayMenuItems::build();
     let menu = build_tray_menu(&items, has_gui);
 
-    // 🛑 الرجاء ملاحظة: لقد أزلنا .with_menu_on_left_click(false) 
-    // لتجنب تعقيدات سلوك النقر الافتراضي ونعتمد على المكتبة لإرسال حدث عند النقر الأيسر.
-    TrayIconBuilder::new()
+    // 🔥 الإصلاح: بناء TrayIcon مع معالج الأحداث
+    let mut builder = TrayIconBuilder::new()
         .with_tooltip("Legion Keyboard Control")
         .with_icon(load_tray_icon(APP_ICON))
-        .with_menu(Box::new(menu))
-        .build()
-        .ok()
+        .with_menu(Box::new(menu));
+
+    // 🔥 الإصلاح: إضافة معالج الأحداث فقط إذا كان هناك GUI
+    if has_gui && !*DENY_HIDING {
+        builder = builder.on_menu_event(move |event| {
+            println!("[TRAY] Menu event received: {}", event.id);
+            
+            // الأحداث تُرسل تلقائياً إلى MenuEvent::receiver()
+            // لا ننفذ الأوامر هنا مباشرة بل نرسلها عبر القناة
+        });
+        
+        // 🔥 الإصلاح: إضافة معالج للنقر الأيسر
+        builder = builder.on_left_click(move || {
+            println!("[TRAY] Left click detected");
+            // النقر الأيسر يرسل حدث SHOW_ID عبر النظام
+        });
+    }
+
+    match builder.build() {
+        Ok(tray_icon) => {
+            println!("[TRAY] Tray icon created successfully");
+            Some(tray_icon)
+        }
+        Err(e) => {
+            eprintln!("[TRAY] Failed to create tray icon: {}", e);
+            None
+        }
+    }
 }
 
 #[must_use]
 fn load_tray_icon(image_data: &[u8]) -> Icon {
-    use tray_icon::Icon;
-
     let image = image::load_from_memory(image_data).unwrap();
     let image_buffer = image.to_rgba8();
     let pixels = image_buffer.into_flat_samples().samples;
 
-    Icon::from_rgba(pixels, image.width(), image.height()).unwrap()
+    match Icon::from_rgba(pixels, image.width(), image.height()) {
+        Ok(icon) => icon,
+        Err(e) => {
+            eprintln!("[TRAY] Failed to load icon: {}", e);
+            // إنشاء أيقونة بديلة فارغة
+            Icon::from_rgba(vec![0, 0, 0, 0], 1, 1).unwrap()
+        }
+    }
 }
