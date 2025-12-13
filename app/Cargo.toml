@@ -30,7 +30,7 @@ image = "0.25.6"
 
 # AmbientLight effect
 scrap = { git = "https://github.com/rustdesk/rustdesk", rev = "c626c24", features = [
-    "wayland",
+    # "wayland", # <--- قم بتعليق هذا السطر
     # "linux-pkg-config",
 ] }
 fast_image_resize = "5.1.3"
