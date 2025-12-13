@@ -164,6 +164,7 @@ impl App {
 
         std::thread::spawn(move || loop {
             if let Ok(event) = MenuEvent::receiver().recv() {
+                println!("Received Tray Menu Event: {}", event.id);
                 if event.id == SHOW_ID {
                     egui_ctx.request_repaint();
 
@@ -221,7 +222,6 @@ impl eframe::App for App {
         // Show active toast messages
         self.toasts.show(ctx);
 
-        if *DENY_HIDING && !self.visible.load(Ordering::SeqCst) {
             self.visible.store(true, Ordering::SeqCst);
             self.toasts
                 .warning("Window hiding is currently not supported.\nSee https://github.com/4JX/L5P-Keyboard-RGB/issues/181")
