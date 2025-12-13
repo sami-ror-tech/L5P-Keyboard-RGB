@@ -40,6 +40,9 @@ pub fn build_tray(has_gui: bool) -> Option<TrayIcon> {
         .with_tooltip("Legion Keyboard Control")
         .with_icon(load_tray_icon(APP_ICON))
         .with_menu(Box::new(menu))
+        // 💡 التصحيح الحاسم: منع ظهور القائمة بالنقر الأيسر.
+        // هذا يجبر المكتبة على استخدام سلوك النقر الأيسر الافتراضي (إرسال الحدث).
+        .with_menu_on_left_click(false) 
         .build()
         .ok()
 }
