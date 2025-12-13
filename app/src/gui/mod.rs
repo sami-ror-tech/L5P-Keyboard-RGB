@@ -165,7 +165,7 @@ impl App {
 
         // خيط معالج أحداث الـ TRAY
         std::thread::spawn(move || loop {
-            // 💡 التعديل الحاسم: استخدام try_recv لضمان عدم توقف الخيط وحجب الأحداث
+            // 💡 التصحيح: استخدام try_recv لضمان عدم توقف الخيط وحجب الأحداث
             if let Ok(event) = MenuEvent::receiver().try_recv() {
                 println!("Received Tray Menu Event: {:?}", event.id);
                 if event.id == SHOW_ID {
