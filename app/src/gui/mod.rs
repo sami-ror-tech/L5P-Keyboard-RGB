@@ -164,7 +164,7 @@ impl App {
 
         std::thread::spawn(move || loop {
             if let Ok(event) = MenuEvent::receiver().recv() {
-                println!("Received Tray Menu Event: {:?}", event.id);
+                println!("Received Tray Menu Event: {:?}", event.id);
                 if event.id == SHOW_ID {
                     egui_ctx.request_repaint();
 
